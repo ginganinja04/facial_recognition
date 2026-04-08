@@ -1,0 +1,3 @@
+street_view_day1_20-15-00.png
+street_view_day1_20-15-03.png
+etc.

@@ -66,7 +66,7 @@ def rename_frames(folder: Path, dry_run: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Rename frame_000001.png files into camera_day_time.png format."
+        description="Rename frame_000001.png files into camera_day_frameNumber.png format."
     )
     parser.add_argument(
         "folder",

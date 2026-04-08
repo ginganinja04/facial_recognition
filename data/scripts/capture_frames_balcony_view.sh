@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-YOUTUBE_URL="https://www.youtube.com/watch?v=YZE87ratrCk" ## bryant park ive
-OUT_BASE="/mnt/c/Users/Maria/spring26_projects/facial_recognition/frames/bryant_park"
+YOUTUBE_URL="https://www.youtube.com/watch?v=rnNPl27Arpk" ## new orleans live   
+OUT_BASE="/mnt/c/Users/Maria/spring26_projects/facial_recognition/frames/new_orleans/balcony_view/"
 SECONDS_BETWEEN_FRAMES=3
 DURATION="02:00:00"
 

@@ -8,15 +8,26 @@ SECONDS_BETWEEN_FRAMES = 3
 # Set start times manually per folder if needed
 # Format: ("camera", "dayX"): "HH:MM:SS"
 START_TIMES = {
-    ("balcony", "day2 (04-09)"): "18:00:00",
     ("balcony", "day1 (04-08)"): "18:00:00",
+    ("balcony", "day2 (04-09)"): "18:00:00",
     ("balcony", "day3 (04-10)"): "18:00:00",
     ("balcony", "day4 (04-11)"): "18:00:00",
 
-    # add others as needed
-    ("inside_bar", "day1"): "19:30:00",
-    ("street_view", "day1"): "20:00:00",
-    ("bar_stage", "day1"): "21:00:00",
+    ("inside_bar", "day1 (04-08)"): "18:00:00",
+    ("inside_bar", "day2 (04-09)"): "18:00:00",
+    ("inside_bar", "day3 (04-10)"): "18:00:00",
+    ("inside_bar", "day4 (04-11)"): "18:00:00",
+
+
+    ("street_view", "day1 (04-08)"): "18:00:00",
+    ("street_view", "day2 (04-09)"): "18:00:00",
+    ("street_view", "day3 (04-10)"): "18:00:00",
+    ("street_view", "day4 (04-11)"): "18:00:00",
+
+    ("bar_stage", "day1 (04-08)"): "18:00:00",
+    ("bar_stage", "day2 (04-09)"): "18:00:00",
+    ("bar_stage", "day3 (04-10)"): "18:00:00",
+    ("bar_stage", "day4 (04-11)"): "18:00:00"
 }
 
 def rename_folder(camera_path: Path):

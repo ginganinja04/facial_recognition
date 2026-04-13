@@ -1,0 +1,6 @@
+camera,day,frame_file,frame_path,timestamp,person_id_in_frame,x1,y1,x2,y2,bbox_width,bbox_height,bbox_area,center_x,center_y,confidence
+balcony,day2,balcony_day2_18-00-00.jpg,data/raw_frames/balcony/day2 (04-09)/balcony_day2_18-00-00.jpg,18:00:00,1,1459.15,346.92,1518.2,499.84,59.05,152.92,9029.62,1488.68,423.38,0.7056
+balcony,day2,balcony_day2_18-00-00.jpg,data/raw_frames/balcony/day2 (04-09)/balcony_day2_18-00-00.jpg,18:00:00,2,1566.12,376.67,1646.27,547.05,80.15,170.38,13656.52,1606.19,461.86,0.3289
+balcony,day2,balcony_day2_18-00-00.jpg,data/raw_frames/balcony/day2 (04-09)/balcony_day2_18-00-00.jpg,18:00:00,3,1329.73,321.81,1409.49,449.47,79.76,127.66,10182.44,1369.61,385.64,0.2746
+balcony,day2,balcony_day2_18-00-03.jpg,data/raw_frames/balcony/day2 (04-09)/balcony_day2_18-00-03.jpg,18:00:03,1,1732.57,463.86,1792.92,641.44,60.35,177.58,10717.02,1762.74,552.65,0.3318
+balcony,day2,balcony_day2_18-00-03.jpg,data/raw_frames/balcony/day2 (04-09)/balcony_day2_18-00-03.jpg,18:00:03,2,1685.43,551.2,1761.65,660.88,76.22,109.68,8359.4,1723.54,606.04,0.2988

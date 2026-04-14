@@ -187,8 +187,12 @@ bool score_pair(
     double e_b = evidence_strength(b.det_norm, b.frames_norm);
     double evidence = (e_a + e_b) / 2.0;
 
-    double same_day_bonus = same_day ? 0.15 : 0.0;
-    double cross_camera_bonus = cross_camera ? 0.15 : 0.0;
+    if (t_sim < 0.6) return false;
+    if (s_sim < 0.75) return false;
+    if (evidence < 0.2) return false;
+
+    double same_day_bonus = same_day ? 0.05 : 0.0;
+    double cross_camera_bonus = cross_camera ? 0.05 : 0.0;
 
     double score =
         0.35 * t_sim +
@@ -201,9 +205,9 @@ bool score_pair(
     if (score > 1.0) score = 1.0;
 
     std::string strength;
-    if (score >= 0.80) strength = "strong";
-    else if (score >= 0.65) strength = "moderate";
-    else if (score >= 0.50) strength = "weak";
+    if (score >= 0.90) strength = "strong";
+    else if (score >= 0.80) strength = "moderate";
+    else if (score >= 0.72) strength = "weak";
     else return false;
 
     out.profile_id_a = a.profile_id;

@@ -162,6 +162,7 @@ bool score_pair(
     const Profile& a,
     const Profile& b,
     bool allow_same_camera,
+    int max_time_diff_min,
     int max_size_diff,
     LinkRow& out
 ) {
@@ -171,10 +172,13 @@ bool score_pair(
     bool same_day = (a.day == b.day);
     bool cross_camera = (a.camera != b.camera);
 
+    int time_diff = std::abs(a.time_mid_min - b.time_mid_min);
+    if (time_diff > max_time_diff_min) return false;
+
     int size_diff = std::abs(a.size_num - b.size_num);
     if (size_diff > max_size_diff) return false;
 
-    double t_sim = time_similarity(a.time_mid_min, b.time_mid_min);
+    double t_sim = time_similarity(a.time_mid_min, b.time_mid_min, max_time_diff_min);
     if (t_sim <= 0.0) return false;
 
     double s_sim = size_similarity(a.size_num, b.size_num);
@@ -342,6 +346,7 @@ int main(int argc, char* argv[]) {
 
     int min_detection_count = 5;
     int min_unique_frames = 3;
+    int max_time_diff_min = 20;
     int max_size_diff = 1;
     double group_threshold = 0.65;
     bool allow_same_camera = false;
@@ -357,6 +362,7 @@ int main(int argc, char* argv[]) {
         else if (arg == "--groups-output") next(groups_output);
         else if (arg == "--min-detection-count") next_int(min_detection_count);
         else if (arg == "--min-unique-frames") next_int(min_unique_frames);
+        else if (arg == "--max-time-diff-min") next_int(max_time_diff_min);
         else if (arg == "--max-size-diff") next_int(max_size_diff);
         else if (arg == "--group-threshold") next_double(group_threshold);
         else if (arg == "--allow-same-camera") allow_same_camera = true;
@@ -442,11 +448,12 @@ int main(int argc, char* argv[]) {
             const auto& b = profiles[j];
 
             if (b.day_num != a.day_num) break;
+            if (b.time_mid_min - a.time_mid_min > max_time_diff_min) break;
 
             compared++;
 
             LinkRow row;
-            if (score_pair(a, b, allow_same_camera, max_size_diff, row)) {
+            if (score_pair(a, b, allow_same_camera, max_time_diff_min, max_size_diff, row)) {
                 links.push_back(row);
                 kept++;
             }

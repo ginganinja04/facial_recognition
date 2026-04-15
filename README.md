@@ -163,5 +163,7 @@ For a selected path:
 Output:
 - data/visuals/<path_id>_visualization.png
 > This stage enables qualitative inspection of candidate paths.
-<img width="1770" height="505" alt="image" src="https://github.com/user-attachments/assets/8fad99b0-6d7c-43a2-b588-58a4644650fe" />
+
+#### Correct Example
+![Candidate Path 001](https://raw.githubusercontent.com/ginganinja04/facial_recognition/main/data/visuals/candidate_path_001_visualization.png) 
 

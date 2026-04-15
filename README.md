@@ -105,7 +105,7 @@ Run the C++ linker:
 
 ```bash
 ./link_candidate_profiles_cpp ...
-
+```
 Input:
 - pseudonymous_profiles.csv
 
@@ -121,8 +121,7 @@ Profiles are compared using constraints:
 Outputs:
 - data/summaries/candidate_profile_links.csv
 - data/summaries/candidate_profile_groups.csv
-
-This stage links profiles across cameras into candidate correspondences.
+> This stage links profiles across cameras into candidate correspondences.
 
 ### 7. Candidate Path Building
 Run build_candidate_paths.py.

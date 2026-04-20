@@ -137,6 +137,27 @@ std::string build_detection_id(const std::string& camera, const std::string& day
     return camera + "_" + day + "_" + frame_file + "_" + std::to_string(person_id);
 }
 
+bool is_outside_camera(const std::string& camera) {
+    return camera == "balcony" || camera == "street_view";
+}
+
+bool is_inside_camera(const std::string& camera) {
+    return camera == "bar_stage" || camera == "inside_bar";
+}
+
+bool can_coexist_at_time(const std::string& camera_a, const std::string& camera_b) {
+    // Both outside: OK (street_view and balcony could capture same person at same time)
+    if (is_outside_camera(camera_a) && is_outside_camera(camera_b)) {
+        return true;
+    }
+    // Both inside: OK (bar_stage and inside_bar could capture same person at same time)
+    if (is_inside_camera(camera_a) && is_inside_camera(camera_b)) {
+        return true;
+    }
+    // One outside and one inside: NOT OK (physically impossible)
+    return false;
+}
+
 std::unordered_map<std::string, Detection> load_detections(const std::string& detections_dir) {
     std::unordered_map<std::string, Detection> detections;
     size_t loaded_files = 0;
@@ -373,6 +394,23 @@ std::unordered_map<std::string, std::vector<Edge>> build_graph(
             target = &det_a;
         }
 
+        // NEW: Reject edges between incompatible simultaneous locations
+        // If source and target are at the same time, their cameras must be compatible
+        if (source->time_minutes == target->time_minutes) {
+            if (!can_coexist_at_time(source->camera, target->camera)) {
+                ++processed;
+                if (processed % progress_step == 0 || processed == total_matches) {
+                    auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::high_resolution_clock::now() - start_time).count();
+                    double progress = static_cast<double>(processed) / static_cast<double>(total_matches);
+                    double remaining = progress > 0.0 ? elapsed * (1.0 - progress) / progress : 0.0;
+                    std::cout << "\r[GRAPH] " << std::fixed << std::setprecision(1) << (progress * 100.0)
+                              << "% (" << processed << "/" << total_matches << ") elapsed " << std::setprecision(1)
+                              << elapsed << "s, remaining " << remaining << "s" << std::flush;
+                }
+                continue;
+            }
+        }
+
         Edge directed_edge;
         directed_edge.target = target->detection_id;
         directed_edge.score = combined_score;
@@ -494,6 +532,23 @@ std::vector<PathInfo> find_person_paths(
                     if (std::find(current_path.begin(), current_path.end(), edge.target) != current_path.end()) {
                         continue;
                     }
+                    
+                    // NEW: Check for impossible simultaneous locations
+                    // If the edge target is at the same time as current node, verify cameras are compatible
+                    if (edge.time_minutes == previous_time) {
+                        auto it_current = detection_lookup.find(node);
+                        auto it_target = detection_lookup.find(edge.target);
+                        if (it_current != detection_lookup.end() && it_target != detection_lookup.end()) {
+                            const std::string& current_camera = it_current->second.camera;
+                            const std::string& target_camera = it_target->second.camera;
+                            
+                            // Reject if cameras are from incompatible location types
+                            if (!can_coexist_at_time(current_camera, target_camera)) {
+                                continue;
+                            }
+                        }
+                    }
+                    
                     int next_camera_changes = camera_changes + (edge.camera_change ? 1 : 0);
                     dfs(edge.target, score_sum + edge.score, next_camera_changes, edge.time_minutes);
                 }

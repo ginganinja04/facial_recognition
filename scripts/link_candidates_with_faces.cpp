@@ -274,9 +274,29 @@ Match compute_similarity(const Detection& a, const Detection& b) {
     match.size_similarity = size_similarity(a.bbox_area, b.bbox_area);
     match.face_similarity = face_similarity(a.face_embedding, b.face_embedding);
 
-    const double face_weight = 0.4;
-    const double time_weight = 0.3;
-    const double size_weight = 0.3;
+    // Determine if this is a cross-camera match
+    bool is_cross_camera = (a.camera != b.camera);
+    
+    // CRITICAL: Face similarity must be the primary factor
+    // Require HIGH minimum face similarity to avoid false positives
+    // This prevents matching different people just because they appear at same time/size
+    const double MIN_FACE_SIMILARITY_SAME_CAMERA = 0.90;  // Same camera: 90% facial similarity required
+    const double MIN_FACE_SIMILARITY_CROSS_CAMERA = 0.92;  // Cross-camera: 92% - higher confidence needed
+    
+    double min_face_required = is_cross_camera ? MIN_FACE_SIMILARITY_CROSS_CAMERA : MIN_FACE_SIMILARITY_SAME_CAMERA;
+    
+    // Reject immediately if face similarity is insufficient
+    if (match.face_similarity < min_face_required) {
+        match.combined_score = 0.0;
+        return match;
+    }
+    
+    // DRAMATICALLY increase face weight - it should be 70-80% of the score
+    // Time and size are just supporting evidence, not primary factors
+    const double face_weight = 0.75;
+    const double time_weight = 0.15;
+    const double size_weight = 0.10;
+    
     match.combined_score = face_weight * match.face_similarity +
                            time_weight * match.time_similarity +
                            size_weight * match.size_similarity;
@@ -320,7 +340,8 @@ std::vector<Match> find_candidate_matches(
                     break;
                 }
                 Match candidate = compute_similarity(current, group[j]);
-                bool is_consecutive = candidate.time_diff_minutes <= 1 && candidate.size_similarity > 0.7;
+                // Consecutive frames (within 1 min) STILL need high face similarity to avoid opposite-gender matches
+                bool is_consecutive = candidate.time_diff_minutes <= 1 && candidate.size_similarity > 0.7 && candidate.face_similarity >= 0.88;
                 if (candidate.combined_score >= min_combined_score || is_consecutive) {
                     candidates.push_back(std::move(candidate));
                 }
@@ -332,7 +353,8 @@ std::vector<Match> find_candidate_matches(
                     break;
                 }
                 Match candidate = compute_similarity(current, group[j]);
-                bool is_consecutive = candidate.time_diff_minutes <= 1 && candidate.size_similarity > 0.7;
+                // Consecutive frames (within 1 min) STILL need high face similarity to avoid opposite-gender matches
+                bool is_consecutive = candidate.time_diff_minutes <= 1 && candidate.size_similarity > 0.7 && candidate.face_similarity >= 0.88;
                 if (candidate.combined_score >= min_combined_score || is_consecutive) {
                     candidates.push_back(std::move(candidate));
                 }

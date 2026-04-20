@@ -215,3 +215,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 data/summaries/
+
+tmp_check_graph.py
+debug_path_0006.py
+check_location_constraint.py
+validate_locations.py
+IMPROVEMENTS_SUMMARY.md
+IMPLEMENTATION_STATUS.md

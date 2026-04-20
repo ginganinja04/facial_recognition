@@ -67,7 +67,7 @@ The C++ builder automatically deduplicates identical detection sequences and pri
 
 5. Visualize person paths across multiple frames:
 ```bash
-python3 scripts/visualize_person_paths.py --paths-csv data/summaries/person_paths.csv --output-dir data/visuals/person_paths
+python3 scripts/visualize_person_paths.py --paths-csv data/summaries/person_paths.csv --output-dir data/visuals
 ```
 
 ### Person Path Tracking

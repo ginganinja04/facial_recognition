@@ -160,7 +160,7 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("data/visuals/person_paths"),
+        default=Path("data/visuals"),
         help="Output directory for path visualizations."
     )
     parser.add_argument(

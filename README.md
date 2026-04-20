@@ -100,3 +100,6 @@ This system now builds complete paths of individuals moving through multiple fra
 - **Multi-GPU Support**: Could parallelize detection and matching phases across devices
 - **Temporal Gap Handling**: May miss individuals who leave frame and return after long gaps
 - **Occlusion Handling**: Limited robustness when individuals are partially occluded   
+
+//#### Current Example
+//![Candidate Path 001](https://raw.githubusercontent.com/ginganinja04/facial_recognition/main/data/visuals/candidate_path_001_visualization.png) 

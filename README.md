@@ -103,5 +103,5 @@ This system now builds complete paths of individuals moving through multiple fra
 - **Occlusion Handling**: Limited robustness when individuals are partially occluded   
 
 #### Current Example
-![Candidate Path 001](https://raw.githubusercontent.com/ginganinja04/facial_recognition/main/data/visuals/path_0006_length_6_score_0.942.png) 
+![Candidate Path 001](https://raw.githubusercontent.com/ginganinja04/facial_recognition/main/data/visuals/person_paths/path_0006_length_6_score_0.942.png) 
 

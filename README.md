@@ -1,7 +1,6 @@
 # facial_recognition
 cyber identity project using facial recognition on live webcam footage
 
-<<<<<<< HEAD
 ## Setup
 
 Install dependencies:

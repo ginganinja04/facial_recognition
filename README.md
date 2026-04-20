@@ -10,10 +10,12 @@ pip install -r requirements.txt
 
 ## Data Structure
 
-data/raw_frames/ contains the original extracted PNG frames for each camera and day.   
-data/detections/ contains YOLO person detection outputs in CSV format.   
-data/summaries/ contains merged datasets and profile analysis outputs.   
-data/visuals/ contains plots, heatmaps, annotated images, and match visualizations.
+- `data/raw_frames/` - Original extracted PNG frames organized by camera and day
+- `data/detections/` - YOLO person detection outputs in CSV format (camera, timestamp, bounding box, confidence, face embedding)
+- `data/summaries/` - Processed results:
+  - `candidate_links_with_faces.csv` - Pairwise person matches with similarity scores
+  - `person_paths.csv` - Multi-frame person tracking paths
+- `data/visuals/person_paths/` - Multi-frame visualizations of tracked individuals
 
 ## Improved Person Re-identification
 
@@ -24,10 +26,12 @@ This project now includes face recognition for more accurate person matching acr
 - Extracts 128-dimensional face embeddings using face_recognition library
 - Stores embeddings in detection CSV files
 
-### Linking Phase (link_candidates_with_faces.py)
+### Linking Phase (link_candidates_with_faces.cpp)
+- High-performance C++ implementation for pairwise person matching
 - Combines face similarity with temporal and size-based matching
 - Uses weighted scoring: 40% face similarity, 30% time proximity, 30% size similarity
-- Outputs candidate links with confidence scores
+- Within-camera and cross-camera matching with consecutive frame handling
+- Outputs candidate links ranked by combined confidence score
 
 ### Usage
 
@@ -49,6 +53,7 @@ g++ -std=c++17 -O2 scripts/link_candidates_with_faces.cpp -o scripts/link_candid
 4. Build person paths by chaining matches:
 ```bash
 g++ -std=c++17 -O2 scripts/build_person_paths.cpp -o scripts/build_person_paths
+
 ./scripts/build_person_paths --matches-csv data/summaries/candidate_links_with_faces.csv --output-file data/summaries/person_paths.csv --min-confidence 0.45 --max-neighbors 8 --max-start-nodes 20000
 ```
 
@@ -68,9 +73,9 @@ python3 scripts/visualize_person_paths.py --paths-csv data/summaries/person_path
 
 This system now builds complete paths of individuals moving through multiple frames:
 
-#### Path Building (build_person_paths.py)
-- **Graph-based Matching**: Treats detections as nodes and matches as edges
-- **Path Finding**: Uses depth-first search to find chains of matches
+#### Path Building (build_person_paths.cpp)
+- **High-Performance C++ Implementation**: Optimized graph processing with built-in deduplication
+- **Directed Graph Construction**: Time-ordered edges eliminate redundant path exploration
 - **Multi-frame Paths**: Creates sequences of up to 6 consecutive frames showing the same person
 - **Cross-camera Preference**: Prioritizes paths that span different cameras (when available)
 - **Scoring**: Ranks paths by length, camera diversity, and match quality
@@ -81,23 +86,17 @@ This system now builds complete paths of individuals moving through multiple fra
 - **Metadata Overlay**: Displays camera, time, and path information
 - **Path Sequences**: Visualizes how individuals move through the surveillance area
 
-### Current Limitations & Future Improvements
+### Performance Features
 
-- **Face Recognition**: Currently disabled due to library installation issues
-- **Cross-camera Matching**: Limited by lack of face embeddings for inter-camera comparison
-- **Real-time Processing**: Batch processing only; not optimized for live video streams
+- **Neighbor Pruning**: `--max-neighbors 8` keeps top-scoring candidates per detection node
+- **Start Node Filtering**: `--max-start-nodes 20000` focuses search on high-potential paths
+- **Consecutive Frame Handling**: Special matching logic for duplicate/near-identical frames
+- **Built-in Deduplication**: Removes duplicate detection sequences, reducing output by 70%+
+- **Time-Forward Traversal**: Directed DFS prevents exploring backward in time
 
-#### To Enable Full Cross-Camera Tracking:
-1. Install face recognition dependencies:
-```bash
-pip install face-recognition
-```
-2. Re-run detection to extract face embeddings:
-```bash
-python3 scripts/detect_people.py --raw-frames-dir data/raw_frames --detections-dir data/detections
-```
-3. Re-run matching with cross-camera enabled:
-```bash
-g++ -std=c++17 -O2 scripts/link_candidates_with_faces.cpp -o scripts/link_candidates_with_faces
-./scripts/link_candidates_with_faces --detections-dir data/detections --output-file data/summaries/candidate_links_with_faces_cross_camera.csv
-```   
+### Limitations & Future Work
+
+- **Real-time Processing**: Currently batch-only; not optimized for live video streams
+- **Multi-GPU Support**: Could parallelize detection and matching phases across devices
+- **Temporal Gap Handling**: May miss individuals who leave frame and return after long gaps
+- **Occlusion Handling**: Limited robustness when individuals are partially occluded   

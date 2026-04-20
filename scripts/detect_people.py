@@ -4,8 +4,17 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
+import cv2
+import numpy as np
 import pandas as pd
 from ultralytics import YOLO
+
+try:
+    import face_recognition
+    FACE_RECOGNITION_AVAILABLE = True
+except ImportError:
+    FACE_RECOGNITION_AVAILABLE = False
+    print("[WARN] face_recognition library not available. Install with: pip install face-recognition")
 
 
 VALID_EXTS = {".jpg", ".jpeg", ".png"}
@@ -48,6 +57,52 @@ def ensure_detection_dir(base_dir: Path, camera: str) -> Path:
     out_dir = base_dir / camera
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
+
+
+def extract_face_embedding(image: np.ndarray, bbox: tuple[float, float, float, float]) -> np.ndarray | None:
+    """
+    Extract face embedding from a person bounding box.
+    Returns 128-dimensional face encoding or None if no face found.
+    """
+    if not FACE_RECOGNITION_AVAILABLE:
+        return None
+
+    x1, y1, x2, y2 = bbox
+    # Convert to integers and ensure bounds
+    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+    h, w = image.shape[:2]
+    x1, x2 = max(0, x1), min(w, x2)
+    y1, y2 = max(0, y1), min(h, y2)
+
+    if x2 <= x1 or y2 <= y1:
+        return None
+
+    # Extract person ROI
+    person_roi = image[y1:y2, x1:x2]
+
+    # Convert to RGB if needed
+    if person_roi.shape[2] == 3:
+        person_roi_rgb = cv2.cvtColor(person_roi, cv2.COLOR_BGR2RGB)
+    else:
+        person_roi_rgb = person_roi
+
+    # Find faces in the person ROI
+    face_locations = face_recognition.face_locations(person_roi_rgb)
+
+    if not face_locations:
+        return None
+
+    # Use the largest face if multiple faces found
+    face_locations = sorted(face_locations, key=lambda loc: (loc[2] - loc[0]) * (loc[1] - loc[3]), reverse=True)
+    top, right, bottom, left = face_locations[0]
+
+    # Extract face encoding
+    face_encodings = face_recognition.face_encodings(person_roi_rgb, [face_locations[0]])
+
+    if face_encodings:
+        return face_encodings[0]  # 128-dimensional vector
+
+    return None
 
 
 def run_detection_on_images(
@@ -107,28 +162,44 @@ def run_detection_on_images(
             center_x = x1 + bbox_width / 2.0
             center_y = y1 + bbox_height / 2.0
 
+            # Load image for face extraction
+            image = cv2.imread(str(image_path))
+            face_embedding = None
+            if image is not None:
+                face_embedding = extract_face_embedding(image, (x1, y1, x2, y2))
+
             person_index_in_frame += 1
 
-            rows.append(
-                {
-                    "camera": camera,
-                    "day": day,
-                    "frame_file": image_path.name,
-                    "frame_path": str(image_path),
-                    "timestamp": time_str.replace("-", ":"),
-                    "person_id_in_frame": person_index_in_frame,
-                    "x1": round(x1, 2),
-                    "y1": round(y1, 2),
-                    "x2": round(x2, 2),
-                    "y2": round(y2, 2),
-                    "bbox_width": round(bbox_width, 2),
-                    "bbox_height": round(bbox_height, 2),
-                    "bbox_area": round(bbox_area, 2),
-                    "center_x": round(center_x, 2),
-                    "center_y": round(center_y, 2),
-                    "confidence": round(conf, 4),
-                }
-            )
+            row_data = {
+                "camera": camera,
+                "day": day,
+                "frame_file": image_path.name,
+                "frame_path": str(image_path),
+                "timestamp": time_str.replace("-", ":"),
+                "person_id_in_frame": person_index_in_frame,
+                "x1": round(x1, 2),
+                "y1": round(y1, 2),
+                "x2": round(x2, 2),
+                "y2": round(y2, 2),
+                "bbox_width": round(bbox_width, 2),
+                "bbox_height": round(bbox_height, 2),
+                "bbox_area": round(bbox_area, 2),
+                "center_x": round(center_x, 2),
+                "center_y": round(center_y, 2),
+                "confidence": round(conf, 4),
+            }
+
+            # Add face embedding if available
+            if face_embedding is not None:
+                # Store embedding as comma-separated string
+                embedding_str = ",".join([f"{x:.6f}" for x in face_embedding])
+                row_data["face_embedding"] = embedding_str
+                row_data["has_face"] = True
+            else:
+                row_data["face_embedding"] = ""
+                row_data["has_face"] = False
+
+            rows.append(row_data)
 
     return rows
 

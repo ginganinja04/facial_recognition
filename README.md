@@ -29,7 +29,7 @@ This project now includes face recognition for more accurate person matching acr
 ### Linking Phase (link_candidates_with_faces.cpp)
 - High-performance C++ implementation for pairwise person matching
 - Combines face similarity with temporal and size-based matching
-- Uses weighted scoring: 40% face similarity, 30% time proximity, 30% size similarity
+- Uses weighted scoring: 75% face similarity, 15% time proximity, 10% size similarity
 - Within-camera and cross-camera matching with consecutive frame handling
 - Outputs candidate links ranked by combined confidence score
 

@@ -549,6 +549,35 @@ std::vector<PathInfo> find_person_paths(
                         }
                     }
                     
+                    // NEW: Check that all nodes in path are from the same day
+                    if (!current_path.empty()) {
+                        auto it_start = detection_lookup.find(current_path[0]);
+                        auto it_target = detection_lookup.find(edge.target);
+                        if (it_start != detection_lookup.end() && it_target != detection_lookup.end()) {
+                            if (it_start->second.day != it_target->second.day) {
+                                continue;  // Skip if different days
+                            }
+                        }
+                    }
+                    
+                    // NEW: Check that all cameras are from same area (all indoor or all outdoor)
+                    if (!current_path.empty()) {
+                        auto it_start = detection_lookup.find(current_path[0]);
+                        auto it_target = detection_lookup.find(edge.target);
+                        if (it_start != detection_lookup.end() && it_target != detection_lookup.end()) {
+                            const std::string& start_camera = it_start->second.camera;
+                            const std::string& target_camera = it_target->second.camera;
+                            
+                            // Check if both cameras are from the same area type
+                            bool start_is_outside = is_outside_camera(start_camera);
+                            bool target_is_outside = is_outside_camera(target_camera);
+                            
+                            if (start_is_outside != target_is_outside) {
+                                continue;  // Skip if mixing indoor/outdoor
+                            }
+                        }
+                    }
+                    
                     int next_camera_changes = camera_changes + (edge.camera_change ? 1 : 0);
                     dfs(edge.target, score_sum + edge.score, next_camera_changes, edge.time_minutes);
                 }
@@ -673,7 +702,7 @@ int main(int argc, char* argv[]) {
     double min_score = 0.5;
     double min_confidence = 0.45;
     bool require_face = false;
-    int max_paths = 100;
+    int max_paths = 1050;
     int max_start_nodes = 20000;
     int max_neighbors = 8;
 

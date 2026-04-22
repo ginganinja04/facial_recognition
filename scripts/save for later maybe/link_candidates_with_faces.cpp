@@ -293,9 +293,9 @@ Match compute_similarity(const Detection& a, const Detection& b) {
     
     // DRAMATICALLY increase face weight - it should be 70-80% of the score
     // Time and size are just supporting evidence, not primary factors
-    const double face_weight = 0.75;
-    const double time_weight = 0.15;
-    const double size_weight = 0.10;
+    const double face_weight = 0.85;
+    const double time_weight = 0.10;
+    const double size_weight = 0.05;
     
     match.combined_score = face_weight * match.face_similarity +
                            time_weight * match.time_similarity +

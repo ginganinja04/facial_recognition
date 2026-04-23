@@ -2,9 +2,9 @@
 set -euo pipefail
 
 YOUTUBE_URL="https://www.youtube.com/watch?v=Ksrleaxxxhw" ## new orleans live   
-OUT_BASE="/mnt/c/Users/Maria/spring26_projects/facial_recognition/frames/new_orleans"
-SECONDS_BETWEEN_FRAMES=3
-DURATION="02:00:00"
+OUT_BASE="../raw_frames/street_view"
+SECONDS_BETWEEN_FRAMES=0.5
+DURATION="00:05:00"
 
 DATE_DIR="$(date +%F)"
 TIME_DIR="$(date +%H-%M-%S)"

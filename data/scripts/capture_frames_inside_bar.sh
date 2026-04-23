@@ -4,9 +4,9 @@ set -euo pipefail
 PAGE_URL="https://www.earthcam.com/usa/louisiana/neworleans/bourbonstreet/?cam=catsmeow"
 STREAM_URL="https://videos-3.earthcam.com/fecnetwork/9106.flv/chunklist_w866160416.m3u8?t=YOUR_TOKEN_HERE&td=YOUR_TIMESTAMP_HERE"
 
-OUT_BASE="/mnt/c/Users/Maria/spring26_projects/facial_recognition/frames/new_orleans/inside_bar"
-SECONDS_BETWEEN_FRAMES=3
-DURATION="03:00:00"
+OUT_BASE="../raw_framesinside_bar"
+SECONDS_BETWEEN_FRAMES=0.5
+DURATION="00:05:00"
 
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 HEADERS=$'Referer: '"$PAGE_URL"$'\r\nUser-Agent: '"$USER_AGENT"$'\r\n'

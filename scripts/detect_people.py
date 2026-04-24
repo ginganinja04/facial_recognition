@@ -63,6 +63,10 @@ def run_detection_on_images(images, model, conf_threshold):
     prev_camera_day = None
     MAX_MATCH_SCORE = 0.65
 
+    global_profiles: list[GlobalProfile] = []
+    next_global_id = 1
+    GLOBAL_MATCH_THRESHOLD = 0.65
+
     for frame_index, image_path in enumerate(images, start=1):
         try:
             camera, day, time_str = parse_filename(image_path)
@@ -126,7 +130,9 @@ def run_detection_on_images(images, model, conf_threshold):
                 "confidence": conf,
                 "person_id_in_frame": person_index_in_frame,
                 "track_id": None,
+                "global_id": None,
                 "match_score": None,
+                "global_match_score": None,
             })
 
         assigned_track_ids = set()
@@ -190,6 +196,7 @@ def run_detection_on_images(images, model, conf_threshold):
                 track.misses = 0
 
                 det["track_id"] = track.track_id
+                det["global_id"] = track.global_id
                 det["match_score"] = round(score, 4)
 
                 assigned_track_ids.add(ti)
@@ -203,14 +210,28 @@ def run_detection_on_images(images, model, conf_threshold):
             if det["confidence"] < 0.4:
                 continue
 
+            global_id, global_score, next_global_id = assign_global_id(
+                det_feat=det["feat"],
+                camera=camera,
+                day=day,
+                time_str=time_str,
+                frame_index=frame_index,
+                global_profiles=global_profiles,
+                next_global_id=next_global_id,
+                threshold=GLOBAL_MATCH_THRESHOLD,
+            )
+            
             det["track_id"] = next_track_id
+            det["global_id"] = global_id
             det["match_score"] = None
+            det["global_match_score"] = global_score
 
             cx, cy = bbox_center(det["bbox"])
 
             active_tracks.append(
                 Track(
                     track_id=next_track_id,
+                    global_id=global_id,
                     bbox=det["bbox"],
                     appearance=det["feat"],
                     last_frame_index=frame_index,
@@ -251,6 +272,7 @@ def run_detection_on_images(images, model, conf_threshold):
                 "timestamp": time_str.replace("-", ":"),
                 "person_id_in_frame": det["person_id_in_frame"],
                 "track_id": det["track_id"],
+                "global_id": det["global_id"],
                 "x1": round(x1, 2),
                 "y1": round(y1, 2),
                 "x2": round(x2, 2),
@@ -262,6 +284,7 @@ def run_detection_on_images(images, model, conf_threshold):
                 "center_y": round(center_y, 2),
                 "confidence": round(det["confidence"], 4),
                 "match_score": det["match_score"],
+                "global_match_score": det["global_match_score"],
             })
 
     return rows
@@ -285,6 +308,7 @@ def write_grouped_csvs(rows: list[dict], detections_dir: Path) -> None:
 @dataclass
 class Track:
     track_id: int
+    global_id: int
     bbox: tuple[float, float, float, float]
     appearance: np.ndarray
     last_frame_index: int
@@ -293,6 +317,66 @@ class Track:
     vx: float = 0.0
     vy: float = 0.0
     misses: int = 0
+
+@dataclass
+class GlobalProfile:
+    global_id: int
+    camera: str
+    day: str
+    appearance: np.ndarray
+    last_frame_index: int
+    last_timestamp: str
+
+def assign_global_id(
+    det_feat: np.ndarray,
+    camera: str,
+    day: str,
+    time_str: str,
+    frame_index: int,
+    global_profiles: list[GlobalProfile],
+    next_global_id: int,
+    threshold: float,
+) -> tuple[int, float | None, int]:
+    best_profile = None
+    best_score = float("inf")
+
+    for profile in global_profiles:
+        # only compare across different cameras
+        if profile.camera == camera:
+            continue
+
+        # optional: keep same day only
+        if profile.day != day:
+            continue
+
+        score = appearance_distance(profile.appearance, det_feat)
+
+        if score < best_score:
+            best_score = score
+            best_profile = profile
+
+    if best_profile is not None and best_score <= threshold:
+        # update profile appearance slowly
+        best_profile.appearance = 0.8 * best_profile.appearance + 0.2 * det_feat
+        best_profile.camera = camera
+        best_profile.day = day
+        best_profile.last_frame_index = frame_index
+        best_profile.last_timestamp = time_str
+
+        return best_profile.global_id, round(best_score, 4), next_global_id
+
+    new_profile = GlobalProfile(
+        global_id=next_global_id,
+        camera=camera,
+        day=day,
+        appearance=det_feat,
+        last_frame_index=frame_index,
+        last_timestamp=time_str,
+    )
+
+    global_profiles.append(new_profile)
+
+    return next_global_id, None, next_global_id + 1
 
 def match_score(track: Track, det_bbox, det_feat, frame_w, frame_h) -> float:
     dist = normalized_predicted_distance(track, det_bbox, frame_w, frame_h)

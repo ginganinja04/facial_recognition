@@ -14,9 +14,25 @@ pip install -r requirements.txt
 ```bash
 python3 scripts/detect_people.py --raw-frames-dir data/raw_frames --detections-dir data/detections
 ```
-or for smaller demo
+
+2. Visualize Bounding Boxes and IDs:
 ```bash
-python3 scripts/detect_people.py --raw-frames-dir mini_demo/data/raw_frames --detections-dir mini_demo/data/detections
+python3 scripts/visualize_tracks.py \
+  --csv-path data/detections/balcony/day1_detections.csv \
+  --raw-frames-dir data/raw_frames/balcony \
+  --out-dir data/tracks_visualized/balcony &&
+python3 scripts/visualize_tracks.py \
+  --csv-path data/detections/bar_stage/day1_detections.csv \
+  --raw-frames-dir data/raw_frames/bar_stage \
+  --out-dir data/tracks_visualized/bar_stage &&
+python3 scripts/visualize_tracks.py \
+  --csv-path data/detections/inside_bar/day1_detections.csv \
+  --raw-frames-dir data/raw_frames/inside_bar \
+  --out-dir data/tracks_visualized/inside_bar &&
+python3 scripts/visualize_tracks.py \
+  --csv-path data/detections/street_view/day1_detections.csv \
+  --raw-frames-dir data/raw_frames/street_view \
+  --out-dir data/tracks_visualized/street_view
 ```
 
 

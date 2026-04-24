@@ -18,8 +18,8 @@ VALID_EXTS = {".jpg", ".jpeg", ".png"}
 def parse_filename(image_path: Path) -> tuple[str, str, str]:
     """
     Parse filenames like:
-        balcony_day2_18-00-00.jpg
-        inside_bar_day1_19-38-09.jpg
+        balcony_18-00-00.jpg
+        inside_bar_19-38-09.jpg
 
     Returns:
         (camera, day, time_str)
@@ -27,15 +27,14 @@ def parse_filename(image_path: Path) -> tuple[str, str, str]:
     stem = image_path.stem
     parts = stem.split("_")
 
-    if len(parts) < 3:
+    if len(parts) < 2:
         raise ValueError(f"Filename does not match expected pattern: {image_path.name}")
 
     time_str = parts[-1]
-    day = parts[-2]
-    camera = "_".join(parts[:-2])
+    camera = "_".join(parts[:-1])
 
-    if not day.startswith("day"):
-        raise ValueError(f"Could not parse day from filename: {image_path.name}")
+    # since day is removed, just set a default
+    day = "day1"
 
     return camera, day, time_str
 

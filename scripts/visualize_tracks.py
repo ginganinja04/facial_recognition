@@ -2,9 +2,9 @@ from pathlib import Path
 import cv2
 import pandas as pd
 
-CSV_PATH = "mini_demo/data/detections/street_view/day1_detections.csv"
-RAW_FRAMES_DIR = Path("mini_demo/data/raw_frames/street_view/day1")
-OUT_DIR = Path("mini_demo/data/tracks_visualized/street_view/day1")
+CSV_PATH = "mini_demo2/data/detections/street_view/day1_detections.csv"
+RAW_FRAMES_DIR = Path("mini_demo2/data/raw_frames")
+OUT_DIR = Path("mini_demo2/data/tracks_visualized/street_view/day1")
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 

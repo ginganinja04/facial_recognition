@@ -1,3 +1,37 @@
+"""
+Purpose:
+--------
+This script performs:
+1. Person detection (YOLO)
+2. Frame-to-frame tracking (Hungarian matching)
+3. Cross-camera identity linking (global profiles)
+
+It processes raw image frames and produces structured CSV outputs
+containing detections, tracking IDs, and cross-camera IDs.
+
+Pipeline Role:
+--------------
+This is the CORE perception + tracking stage of the system.
+
+Input:
+- Raw image frames (organized by camera)
+- YOLO model
+
+Output:
+- CSV files with:
+    - bounding boxes
+    - per-frame track IDs
+    - global IDs (cross-camera identity)
+    - spatial + confidence metadata
+
+Key Ideas:
+----------
+- Tracks are maintained per camera stream
+- Hungarian matching assigns detections → existing tracks
+- Simple motion model (velocity smoothing + prediction)
+- Appearance features enable cross-camera matching
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +54,9 @@ def parse_filename(image_path: Path) -> tuple[str, str, str]:
     Parse filenames like:
         balcony_18-00-00.jpg
         inside_bar_19-38-09.jpg
+    
+    Assumption:
+        Filenames follow: camera_timestamp.jpg
 
     Returns:
         (camera, day, time_str)
@@ -40,6 +77,9 @@ def parse_filename(image_path: Path) -> tuple[str, str, str]:
 
 
 def collect_images(raw_frames_dir: Path) -> list[Path]:
+    """
+    Recursively collect all image files from raw frames directory.
+    """
     images: list[Path] = []
     for path in raw_frames_dir.rglob("*"):
         if path.is_file() and path.suffix.lower() in VALID_EXTS:
@@ -48,6 +88,9 @@ def collect_images(raw_frames_dir: Path) -> list[Path]:
 
 
 def ensure_detection_dir(base_dir: Path, camera: str) -> Path:
+    """
+    Ensure output directory exists per camera.
+    """
     out_dir = base_dir / camera
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
@@ -55,23 +98,94 @@ def ensure_detection_dir(base_dir: Path, camera: str) -> Path:
 
 
 def run_detection_on_images(images, model, conf_threshold):
+    """
+    Run YOLO person detection, assign local track IDs, and attempt cross-camera matching.
+
+    This function is the main processing loop for the detection/tracking stage.
+    It takes a sorted list of image frames, runs YOLO on each frame, keeps only
+    detections classified as "person", then links detections across nearby frames
+    using a lightweight tracker.
+
+    Tracking Approach:
+    ------------------
+    Each active track stores:
+    - last bounding box
+    - center point
+    - smoothed velocity
+    - appearance feature
+    - missed-frame count
+
+    For every new frame, the code builds a cost matrix comparing each existing
+    track to each new detection. The Hungarian algorithm is then used to choose
+    the best one-to-one assignment between tracks and detections.
+
+    Match Cost Uses:
+    ----------------
+    The matching score combines:
+    - predicted center distance
+    - bounding-box size difference
+    - IoU overlap
+    - HSV appearance distance
+
+    Lower match score means the detection is more likely to belong to that track.
+
+    Cross-Camera Matching:
+    ----------------------
+    When a detection cannot be matched to an existing local track, a new track is
+    created. Before assigning a new global identity, the detection's appearance
+    feature is compared against stored global profiles from other cameras on the
+    same day. If the appearance distance is below the global threshold, the
+    detection reuses that global ID. Otherwise, a new global ID is created.
+
+    Output:
+    -------
+    Returns a list of dictionaries. Each dictionary becomes one CSV row and
+    contains frame metadata, bounding-box coordinates, local track ID, global ID,
+    confidence score, and matching scores.
+    """
+
+    # Stores all final detection rows that will later be written to CSV.
     rows = []
 
+    # Tracks currently active in the current camera/day stream.
+    # These are reset when the input switches to a different camera or day.
     active_tracks: list[Track] = []
+    
+    # Local track IDs are only used within the current run/camera sequence.
     next_track_id = 1
+    
+    # If a track is not matched for this many frames, it is removed.
     max_misses = 8
+    
+    # Used to detect when the loop moves from one camera/day group to another.
     prev_camera_day = None
+    
+    # Maximum allowed local matching cost.
+    # Matches with a score above this are treated as unreliable and rejected.
     MAX_MATCH_SCORE = 0.65
-
+    
+    # Global profiles store appearance features used for cross-camera identity matching.
     global_profiles: list[GlobalProfile] = []
+    
+    # Global IDs are meant to represent possible same-person matches across cameras.
     next_global_id = 1
+    
+    # Maximum appearance distance allowed for cross-camera global matching.
     GLOBAL_MATCH_THRESHOLD = 0.65
 
+    # Process each frame sequentially:
+    # - detect people
+    # - match to existing tracks
+    # - update or create tracks
+    # - assign global IDs
     for frame_index, image_path in enumerate(images, start=1):
         try:
             camera, day, time_str = parse_filename(image_path)
 
             current_camera_day = (camera, day)
+
+            # If we switch to a new camera/day, reset active tracks
+            # because tracking is only valid within a single stream.
             if prev_camera_day is not None and current_camera_day != prev_camera_day:
                 active_tracks = []
             prev_camera_day = current_camera_day
@@ -89,6 +203,7 @@ def run_detection_on_images(images, model, conf_threshold):
 
         frame_h, frame_w = image.shape[:2]
 
+        # Run YOLO detection on the current frame
         try:
             results = model.predict(
                 source=str(image_path),
@@ -108,6 +223,8 @@ def run_detection_on_images(images, model, conf_threshold):
         if boxes is None or len(boxes) == 0:
             continue
 
+        # Build detection objects for this frame.
+        # Each detection stores spatial info + appearance features.
         detections = []
         person_index_in_frame = 0
 
@@ -138,7 +255,10 @@ def run_detection_on_images(images, model, conf_threshold):
         assigned_track_ids = set()
         assigned_det_indices = set()
 
-        # ---------- Hungarian matching ----------
+        # ---------- Local track-to-detection matching ----------
+        # Build a cost matrix comparing existing tracks to new detections.
+        # The Hungarian algorithm finds the optimal 1-to-1 assignment
+        # that minimizes total matching cost.
         num_tracks = len(active_tracks)
         num_dets = len(detections)
 
@@ -150,7 +270,9 @@ def run_detection_on_images(images, model, conf_threshold):
                     iou = compute_iou(track.bbox, det["bbox"])
                     dist = normalized_predicted_distance(track, det["bbox"], frame_w, frame_h)
 
-                    # gating
+                    # Gating: discard impossible matches early
+                    # - too far apart (distance too large)
+                    # - no overlap AND still not close enough
                     if dist > 0.80:
                         continue
                     if iou < 0.001 and dist > 0.20:
@@ -158,11 +280,6 @@ def run_detection_on_images(images, model, conf_threshold):
 
                     score = match_score(track, det["bbox"], det["feat"], frame_w, frame_h)
                     cost_matrix[ti, di] = score
-
-                    #print(
-                    #    f"track {track.track_id} vs det {di}: "
-                    #    f"dist={dist:.3f}, iou={iou:.3f}, score={score:.3f}"
-                    #)
 
             row_ind, col_ind = linear_sum_assignment(cost_matrix)
 
@@ -180,7 +297,8 @@ def run_detection_on_images(images, model, conf_threshold):
 
                 new_cx, new_cy = bbox_center(det["bbox"])
 
-                # smoothed velocity update
+                # Update velocity using exponential smoothing to reduce jitter
+                # and improve prediction stability across frames
                 measured_vx = new_cx - track.cx
                 measured_vy = new_cy - track.cy
 
@@ -202,7 +320,10 @@ def run_detection_on_images(images, model, conf_threshold):
                 assigned_track_ids.add(ti)
                 assigned_det_indices.add(di)
 
-        # ---------- New tracks for unmatched detections ----------
+        # ---------- Create new tracks ----------
+        # Any detection not matched to an existing track becomes a new track.
+        # Before assigning a new global ID, attempt cross-camera matching
+        # using appearance similarity.
         for di, det in enumerate(detections):
             if di in assigned_det_indices:
                 continue
@@ -244,7 +365,9 @@ def run_detection_on_images(images, model, conf_threshold):
             )
             next_track_id += 1
 
-        # ---------- Increment misses for unmatched tracks ----------
+        # ---------- Handle unmatched tracks ----------
+        # Tracks not matched in this frame are marked as missed.
+        # Tracks exceeding max_misses are removed.
         for ti, track in enumerate(active_tracks):
             if ti not in assigned_track_ids:
                 if track.last_frame_index != frame_index:
@@ -252,7 +375,9 @@ def run_detection_on_images(images, model, conf_threshold):
 
         active_tracks = [t for t in active_tracks if t.misses <= max_misses]
 
-        # ---------- Write rows ----------
+        # ---------- Save detections ----------
+        # Convert detections into structured rows for CSV output,
+        # including spatial features, IDs, and matching scores.
         for det in detections:
             if det["track_id"] is None:
                 continue
@@ -291,6 +416,16 @@ def run_detection_on_images(images, model, conf_threshold):
 
 
 def write_grouped_csvs(rows: list[dict], detections_dir: Path) -> None:
+    """
+    Save results grouped by camera and day.
+
+    Output structure:
+    detections/
+        camera_1/
+            day1_detections.csv
+        camera_2/
+            day1_detections.csv
+    """
     if not rows:
         print("[INFO] No person detections found.")
         return
@@ -304,9 +439,22 @@ def write_grouped_csvs(rows: list[dict], detections_dir: Path) -> None:
         group.to_csv(out_file, index=False)
         print(f"[OK] Wrote {len(group)} detections to {out_file}")
 
+# -------------------------------
+# Data structures
+# -------------------------------
 
 @dataclass
 class Track:
+    """
+    Represents a single tracked object within a camera stream.
+
+    Stores:
+    - spatial state (bbox, center)
+    - motion (velocity)
+    - appearance feature
+    - tracking + global IDs
+    - last seen frame
+    """
     track_id: int
     global_id: int
     bbox: tuple[float, float, float, float]
@@ -320,6 +468,12 @@ class Track:
 
 @dataclass
 class GlobalProfile:
+    """
+    Represents a cross-camera identity.
+
+    Used to link the same person across different cameras
+    using appearance similarity.
+    """
     global_id: int
     camera: str
     day: str
@@ -337,6 +491,18 @@ def assign_global_id(
     next_global_id: int,
     threshold: float,
 ) -> tuple[int, float | None, int]:
+    """
+    Assign or create a global identity for a detection.
+
+    Logic:
+    - Compare detection appearance to existing profiles
+    - Only match across different cameras
+    - If similarity is high → reuse global_id
+    - Otherwise → create new identity
+
+    Also updates profile appearance over time.
+    """
+
     best_profile = None
     best_score = float("inf")
 
@@ -378,7 +544,22 @@ def assign_global_id(
 
     return next_global_id, None, next_global_id + 1
 
+# -------------------------------
+# Matching + similarity functions
+# -------------------------------
+
 def match_score(track: Track, det_bbox, det_feat, frame_w, frame_h) -> float:
+    """
+    Combined cost function for track matching.
+
+    Uses weighted combination of:
+    - motion distance (predicted vs actual)
+    - size difference
+    - IoU overlap
+    - appearance similarity
+
+    Lower score = better match
+    """
     dist = normalized_predicted_distance(track, det_bbox, frame_w, frame_h)
     size_diff = size_difference(track.bbox, det_bbox)
     iou = compute_iou(track.bbox, det_bbox)
@@ -393,6 +574,10 @@ def match_score(track: Track, det_bbox, det_feat, frame_w, frame_h) -> float:
     return score
 
 def compute_iou(box_a, box_b) -> float:
+    """
+    Intersection over Union between two boxes.
+    Measures spatial overlap.
+    """
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
 
@@ -415,6 +600,18 @@ def compute_iou(box_a, box_b) -> float:
 
 
 def extract_appearance_feature(image, bbox):
+    """
+    Extract simple appearance descriptor.
+
+    Method:
+    - Crop bounding box
+    - Convert to HSV
+    - Compute histograms (upper/lower body)
+    - Normalize and concatenate
+
+    Result:
+    - Lightweight feature vector for identity matching
+    """
     x1, y1, x2, y2 = map(int, bbox)
     h, w = image.shape[:2]
     x1, x2 = max(0, x1), min(w, x2)
@@ -444,10 +641,16 @@ def extract_appearance_feature(image, bbox):
 
 
 def appearance_distance(feat_a, feat_b) -> float:
+    """
+    Euclidean distance between appearance vectors.
+    """
     return float(np.linalg.norm(feat_a - feat_b))
 
 
 def normalized_center_distance(box_a, box_b, frame_w, frame_h) -> float:
+    """
+    Distance between box centers normalized by frame size.
+    """
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
 
@@ -462,15 +665,24 @@ def normalized_center_distance(box_a, box_b, frame_w, frame_h) -> float:
 
 
 def bbox_center(box):
+    """
+    Compute center of bounding box.
+    """
     x1, y1, x2, y2 = box
     return (x1 + x2) / 2.0, (y1 + y2) / 2.0
 
 
 def predicted_center(track: Track):
+    """
+    Predict next position using simple linear motion model.
+    """
     return track.cx + 1.2 * track.vx, track.cy + 1.2 * track.vy
 
 
 def normalized_predicted_distance(track: Track, det_bbox, frame_w, frame_h) -> float:
+    """
+    Distance between predicted track position and detection.
+    """
     pred_cx, pred_cy = predicted_center(track)
     det_cx, det_cy = bbox_center(det_bbox)
 
@@ -480,6 +692,9 @@ def normalized_predicted_distance(track: Track, det_bbox, frame_w, frame_h) -> f
 
 
 def size_difference(box_a, box_b) -> float:
+    """
+    Relative size difference between two bounding boxes.
+    """
     aw = max(1.0, box_a[2] - box_a[0])
     ah = max(1.0, box_a[3] - box_a[1])
     bw = max(1.0, box_b[2] - box_b[0])
@@ -490,6 +705,14 @@ def size_difference(box_a, box_b) -> float:
     return float((w_diff + h_diff) / 2.0)
 
 def main() -> None:
+    """
+    Entry point:
+    1. Parse arguments
+    2. Load YOLO model
+    3. Collect frames
+    4. Run detection + tracking pipeline
+    5. Save results
+    """
     parser = argparse.ArgumentParser(
         description="Run YOLO person detection on raw frames and save one CSV per camera/day."
     )
